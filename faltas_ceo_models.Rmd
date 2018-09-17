@@ -1,0 +1,404 @@
+---
+title: "faltas_ceo_models"
+output: html_document
+---
+
+
+```{r}
+#Opções gerais
+knitr::opts_chunk$set(
+	echo = FALSE,
+	message = FALSE,
+	warning = FALSE
+)
+options("scipen"=100, "digits"=4)#usar notação decimal
+knitr::opts_chunk$set(cache=TRUE)#otimizar a utilização de memória cache
+```
+
+
+```{r, message=FALSE, warning=FALSE, include=FALSE}
+#Importação das bibliotescas
+library(readr)
+library(plyr)
+library(chron)#transformar caracter em hora
+#library(corrgram)
+library(tidyverse)
+library(forcats)#ordenar barras no ggplot
+library(gridExtra)#arrumar multiplos gráficos em uma figura
+library(knitr)
+library(kableExtra)#Fazer tabela do summary
+library(pander)#Fazer tabela do chi.test
+library(caret)#K-fold cross validation
+library(caTools)#Calcular AUC
+library(gbm) #Stochastic Gradient Boosting
+library(ROSE) #dealing with imbalanced data
+library(klaR) #modelo naive bayes/ Localized Linear Discriminant Analysis
+library(binda) #modelo Binary Discriminant Analysis
+library(LiblineaR) #Support Vector Machine 
+library(nnet) #Bayesian Regularized Neural Networks
+library(fastAdaboost) #AdaBoost Classification Trees
+library(xgboost) #eXtreme Gradient Boosting
+library(deepnet) #Stacked AutoEncoder Deep Neural Network
+library(MASS) #Generalized Linear Model with Stepwise Feature Selection
+library(e1071) #
+library(entropy) #metrica para avaliar modelos de ML
+```
+
+
+```{r}
+#Importanto a base
+faltas_ceo <- read_csv("faltas_ceo.csv")
+```
+
+
+#Função para remover caracteres especiais.
+```{r}
+rm_accent <- function(str,pattern="all") {
+  # Rotinas e funções úteis V 1.0
+  # rm.accent - REMOVE ACENTOS DE PALAVRAS
+  # Função que tira todos os acentos e pontuações de um vetor de strings.
+  # Parâmetros:
+  # str - vetor de strings que terão seus acentos retirados.
+  # patterns - vetor de strings com um ou mais elementos indicando quais acentos deverão ser retirados.
+  #            Para indicar quais acentos deverão ser retirados, um vetor com os símbolos deverão ser passados.
+  #            Exemplo: pattern = c("´", "^") retirará os acentos agudos e circunflexos apenas.
+  #            Outras palavras aceitas: "all" (retira todos os acentos, que são "´", "`", "^", "~", "¨", "ç")
+  if(!is.character(str))
+    str <- as.character(str)
+  
+  pattern <- unique(pattern)
+  
+  if(any(pattern=="Ç"))
+    pattern[pattern=="Ç"] <- "ç"
+  
+  symbols <- c(
+    acute = "áéíóúÁÉÍÓÚýÝ",
+    grave = "àèìòùÀÈÌÒÙ",
+    circunflex = "âêîôûÂÊÎÔÛ",
+    tilde = "ãõÃÕñÑ",
+    umlaut = "äëïöüÄËÏÖÜÿ",
+    cedil = "çÇ"
+  )
+  
+  nudeSymbols <- c(
+    acute = "aeiouAEIOUyY",
+    grave = "aeiouAEIOU",
+    circunflex = "aeiouAEIOU",
+    tilde = "aoAOnN",
+    umlaut = "aeiouAEIOUy",
+    cedil = "cC"
+  )
+  
+  accentTypes <- c("´","`","^","~","¨","ç")
+  
+  if(any(c("all","al","a","todos","t","to","tod","todo")%in%pattern)) # opcao retirar todos
+    return(chartr(paste(symbols, collapse=""), paste(nudeSymbols, collapse=""), str))
+  
+  for(i in which(accentTypes%in%pattern))
+    str <- chartr(symbols[i],nudeSymbols[i], str)
+  
+  return(str)
+}
+
+```
+
+
+
+```{r, include=FALSE}
+#Transformando as variáveis
+faltas_ceo$UNIDADE_ATD <- as.factor(faltas_ceo$UNIDADE_ATD)
+faltas_ceo$ESPECIALIDADE <- as.factor(faltas_ceo$ESPECIALIDADE)
+faltas_ceo$DIA_SEMANA <- factor(faltas_ceo$DIA_SEMANA, levels = c("SEG", "TER", "QUA", "QUI", "SEX", "SÁB"))
+faltas_ceo$COD_USUARIO <- as.character(faltas_ceo$COD_USUARIO)
+faltas_ceo$CNS<- as.character(faltas_ceo$CNS)
+faltas_ceo$SEXO <- as.factor(faltas_ceo$SEXO)
+faltas_ceo$UNIDADE_REFERENCIA <- as.factor(faltas_ceo$UNIDADE_REFERENCIA)
+faltas_ceo$ESCOLARIDADE <- factor(faltas_ceo$ESCOLARIDADE, levels = c("Não sabe ler / escrever",
+                                        "Alfabetizado", "Fundamental incompleto (1° grau)",
+                                        "Fundamental completo (1° grau)", "Médio incompleto (2° grau)",
+                                        "Médio completo (2° grau)", "Superior incompleto", "Superior completo",
+                                        "Especialização/Residencia", "Mestrado", "Doutorado"))
+unique(faltas_ceo$ESCOLARIDADE)
+faltas_ceo$RETORNO <- as.factor(faltas_ceo$RETORNO)
+faltas_ceo$FALTA <- as.factor(faltas_ceo$FALTA)
+faltas_ceo$DATA_ATD <- as.Date(faltas_ceo$DATA_ATD, format = "%d/%m/%Y")
+faltas_ceo$DN <- as.Date(faltas_ceo$DN, format = "%d/%m/%Y")
+faltas_ceo$IDADE <- as.double((faltas_ceo$DATA_ATD - faltas_ceo$DN)/365) 
+faltas_ceo$HORA_ATD <- chron(times = faltas_ceo$HORA_ATD)
+faltas_ceo$PERIODO_ATD <- ifelse(faltas_ceo$HORA_ATD < chron(times = "12:00:00"), "manhã", "tarde")
+faltas_ceo$PERIODO_ATD <- as.factor(faltas_ceo$PERIODO_ATD)
+
+#Retirando as variáveis que não serão utilizadas
+faltas_ceo <-faltas_ceo[,-c(3,4,9,11,12,13)]
+```
+
+
+```{r}
+#Aplicando a função
+faltas_ceo$UNIDADE_REFERENCIA <- rm_accent(faltas_ceo$UNIDADE_REFERENCIA)
+faltas_ceo$ESCOLARIDADE <- rm_accent(faltas_ceo$ESCOLARIDADE)
+faltas_ceo$PERIODO_ATD <- rm_accent(faltas_ceo$PERIODO_ATD)
+```
+
+
+#Separando o banco
+```{r}
+#Cortando o banco para deixar apenas os anos de 2016 e 2017
+#Separando o banco por especialidade
+faltas_ceo$DATA_ATD <- str_sub(faltas_ceo$DATA_ATD, end=4)
+
+faltas_ceo_16_17 <- subset(faltas_ceo, faltas_ceo$DATA_ATD==2016 | faltas_ceo$DATA_ATD==2017)
+
+Odonto_Endodontia <- subset(faltas_ceo_16_17, faltas_ceo_16_17$ESPECIALIDADE=="Odonto/Endodontia")
+Odonto_Cir_BucoMaxilo <- subset(faltas_ceo_16_17, faltas_ceo_16_17$ESPECIALIDADE=="Odonto/Cir.Buco Maxilo")
+Odonto_ProteseDentaria <- subset(faltas_ceo_16_17, faltas_ceo_16_17$ESPECIALIDADE=="Odonto/Prótese Dentária")
+Odonto_Perio <- subset(faltas_ceo_16_17, faltas_ceo_16_17$ESPECIALIDADE=="Odonto/Perio")
+Odontologia <- subset(faltas_ceo_16_17, faltas_ceo_16_17$ESPECIALIDADE=="Odontologia")
+OdontoEspec_CEO <- subset(faltas_ceo_16_17, faltas_ceo_16_17$ESPECIALIDADE=="Odonto Espec/CEO")
+Odonto_Radiologica <- subset(faltas_ceo_16_17, faltas_ceo_16_17$ESPECIALIDADE=="Odonto/Radiológica")
+Odonto_Pediatria <- subset(faltas_ceo_16_17, faltas_ceo_16_17$ESPECIALIDADE=="Odonto/Pediatria")
+Odonto_EstomatologiaBucal <- subset(faltas_ceo_16_17, faltas_ceo_16_17$ESPECIALIDADE=="Odonto/Estomatologia Bucal")
+
+
+lista <- unique(faltas_ceo_16_17$ESPECIALIDADE)
+lista <- lista %>% as.data.frame()
+```
+
+
+
+```{r}
+'
+rl_falta <- glm(FALTA ~ ., data = faltas_ceo, family = "binomial")
+summary(rl_falta)
+unidade_ref <- (summary(rl_falta))
+unidade_ref <- unidade_ref$coefficient
+unidade_ref <- unidade_ref %>% as.data.frame()
+'
+```
+
+
+```{r}
+'
+#plot regressão logística
+plot(rl_falta)
+'
+```
+
+
+#Criação da amostra de treino e teste
+```{r}
+'
+faltas_ceo <- na.omit(Odonto_Endodontia)
+
+## Criando a amostra de treino com 75% do tamanho da amostra total e amostra de teste com 25%
+smp_size <- floor(0.75 * nrow(Odonto_Endodontia))
+
+train_ind <- sample(seq_len(nrow(Odonto_Endodontia)), size = smp_size)
+
+train <- Odonto_Endodontia[train_ind, ]
+test <- Odonto_Endodontia[-train_ind, ]
+'
+```
+
+
+
+#Testes com o dataset para a predição
+```{r}
+'
+train_prep <- train
+test_prep <- test
+
+table(train_prep$FALTA)
+'
+```
+
+
+#Opções do K-Folds
+Utilização para controle na aplicação dos modelos de Machine Learning
+```{r}
+'
+#Create train/test index
+myFolds <- createFolds(Odonto_Endodontia$FALTA, k = 5)
+
+
+# Create trainControl object: myControl - Deve ser utilizado em todos os modelos para que sejam comparáveis
+myControl <- trainControl(
+  method = "cv",
+  number = 10,
+  repeats = 5,
+  summaryFunction = twoClassSummary,
+  classProbs = TRUE, # IMPORTANT!
+  verboseIter = TRUE,
+  savePredictions = TRUE,
+  sampling = "up",
+  index = myFolds
+)
+'
+```
+
+
+#Função para aplicar os modelos de machine learning no bancos separados
+```{r}
+
+ml_models <- function(nome_banco){
+  
+  set.seed(2)
+  
+  banco_escolhido <- na.omit(nome_banco)
+
+  ## Criando a amostra de treino com 75% do tamanho da amostra total e amostra de teste com 25%
+  smp_size <- floor(0.75 * nrow(banco_escolhido))
+  
+  train_ind <- sample(seq_len(nrow(banco_escolhido)), size = smp_size)
+  
+  train <- banco_escolhido[train_ind, ]
+  test <- banco_escolhido[-train_ind, ]
+  
+  train_prep <- train
+  test_prep <- test
+  
+  table(train_prep$FALTA)
+  
+  #Create train/test index
+  #myFolds <- createFolds(train_prep$FALTA, k = 5)
+  # Create trainControl object: myControl - Deve ser utilizado em todos os modelos para que sejam comparáveis
+  myControl <- trainControl(
+    #"repeatedcv" faz com que as repetições rodem
+    method = "repeatedcv",
+    #não precisa do k-folds. "number" é o número de folds
+    number = 2,
+    #repeats é o número de repetições para cada fold. Nesse caso 5 repetições para cada fold
+    repeats = 2,
+    summaryFunction = twoClassSummary,
+    classProbs = TRUE, # IMPORTANT!
+    verboseIter = TRUE,
+    savePredictions = TRUE,
+    returnResamp = "all",
+    sampling = "up"#,
+    #index = myFolds
+  )
+  
+  #lista de modelos que serão usados inicialmente 
+  # "glm" = Generalized Linear Model, "ranger" = Random Forest, "knn" = k-Nearest Neighbors, 
+  #"nnet" = Neural Network, "dnn" = Stacked AutoEncoder Deep Neural Network, 
+  #"xgbTree" = eXtreme Gradient Boosting, "gbm" = Stochastic Gradient Boosting, "adaboost" = AdaBoost Classification Trees,
+  #"glmStepAIC" = Generalized Linear Model with Stepwise Feature Selection, "nb" = Naive Bayes
+  
+  # "glm", "ranger", "knn", "nb", "gbm", "nnet", "adaboost", "xgbTree", "dnn", "glmStepAIC"
+  modelos = c("")
+  
+  usePackage <- function(p) 
+  {
+  if (!is.element(p, installed.packages()[,1]))
+    install.packages(p, dep = TRUE)
+  require(p, character.only = TRUE)
+  }
+  
+  i <- 1
+  index <- 1
+  maior_valor <- 0
+  while(i <= length((modelos))) {
+    
+    # Fit model
+    model <- train(
+    FALTA ~ ., 
+    data = train_prep[, -c(1)],
+    preProcess = c("center", "scale"),
+    metric = "ROC",
+    method = modelos[index],
+    #tuneGrid = expand.grid(
+    #      alpha = 0:1,
+    #      lambda  = seq(0.0001, 1, length = 10)),
+    #na.action = na.pass,
+    trControl = myControl
+    
+    )
+
+    # Print model to console
+    model
+    
+    # Print maximum ROC statistic
+    max(model[["results"]][["ROC"]])
+  
+    
+    #predição dos modelos
+    predictions <- predict(model, test_prep[, -c(1)])
+    a <- confusionMatrix(predictions, test_prep$FALTA)
+    
+    b <- a$byClass %>% as.list()
+
+    neg_pred <- b[4] %>% as.data.frame()
+    neg_pred <- neg_pred$Neg.Pred.Value
+    
+    if(neg_pred > maior_valor){
+      maior_valor <- neg_pred
+      resultado <- paste("O melhor modelo foi: ", modelos[index], ", com o valor de: ", neg_pred)
+      a <- a
+    }
+    else{
+      maior_valor <- maior_valor
+    }
+    
+    i <- i + 1
+    index <- index + 1
+    
+  }
+    
+
+  #retorno da função
+  #return(resultado)
+  return(list(resultado, a))
+  
+}
+
+```
+
+
+#Modelo Lasso/Ridge
+```{r}
+'
+Odonto_Endodontia <- na.omit(Odonto_Endodontia)
+
+Odonto_Endodontia$ESPECIALIDADE <- as.factor(Odonto_Endodontia$ESPECIALIDADE)
+Odonto_Endodontia$DATA_ATD <- as.factor(Odonto_Endodontia$DATA_ATD)
+
+#Lasso(alpha = 1)-Ridge(alpha = 0) Regression
+
+# Fit glmnet model: model
+model_glmnet <- train(
+  FALTA ~., Odonto_Endodontia[, -c(1)],
+  preProcess = c("center", "scale"),
+  metric = "ROC",
+  method = "glmnet",
+  tuneGrid = expand.grid(
+        alpha = 0:1,
+        lambda  = seq(0.0001, 1, length = 10)),
+  #na.action = na.pass,
+  trControl = myControl
+)
+
+# Print model to console
+model_glmnet
+
+# Print maximum ROC statistic
+max(model_glmnet[["results"]][["ROC"]])
+
+#Plot results
+plot(model_glmnet)
+plot(model_glmnet$finalModel)
+
+banco_glmnet <- model_glmnet$trainingData
+
+banco_glmnet$.outcome <- as.factor(banco_glmnet$.outcome)
+
+confusionMatrix(banco_glmnet$.outcome, sample(banco_glmnet$.outcome))
+'
+```
+
+#Predição para o modelo Lasso/Ridge
+```{r}
+'
+predictions_glmnet <- predict(model_glmnet, Odonto_Endodontia[, -c(1)])
+confusionMatrix(predictions_glmnet, Odonto_Endodontia$FALTA)
+'
+```
