@@ -1,8 +1,16 @@
 ---
 title: "faltas_ceo_models"
 output: 
-  html_document:
-    code_folding: hide
+  word_document:
+    reference_docx: template.docx
+  #html_document:
+  #  toc: true
+  #  toc_depth: 5
+  #  toc_float: true
+  #  collapsed: true
+  #  fig_width: 9
+  #  fig_height: 7
+  #  code_folding: hide
 ---
 
 
@@ -50,6 +58,7 @@ library(e1071) #
 library(entropy) #metrica para avaliar modelos de ML
 library(tibble)
 library(plotly) #gráficos interativos
+library(doParallel) #Parallel Processing
 ```
 
 
@@ -58,7 +67,6 @@ library(plotly) #gráficos interativos
 #Importanto a base
 faltas_ceo <- read_csv("faltas_ceo.csv")
 ```
-
 
 #Função para remover acentos
 ```{r}
@@ -167,6 +175,7 @@ faltas_ceo$ESCOLARIDADE <- as.factor(faltas_ceo$ESCOLARIDADE)
 #Separando o banco
 Foram removidas da coluna DATA_ATD o dia e o mes, com o propósito de cortar o banco apenas para os anos de 2016 e 2017;
 E depois separados em nove novos bancos, ou seja, um banco para cada especialidade.
+É aplicada a função na.omit() nos três bancos que serão usados na análise.
 ```{r}
 #Cortando o banco para deixar apenas os anos de 2016 e 2017
 #Separando o banco por especialidade
@@ -175,14 +184,17 @@ faltas_ceo$DATA_ATD <- str_sub(faltas_ceo$DATA_ATD, end=4)
 faltas_ceo_16_17 <- subset(faltas_ceo, faltas_ceo$DATA_ATD==2016 | faltas_ceo$DATA_ATD==2017)
 
 Odonto_Endodontia <- subset(faltas_ceo_16_17, faltas_ceo_16_17$ESPECIALIDADE=="Odonto/Endodontia")
+Odonto_Endodontia <- na.omit(Odonto_Endodontia)
 Odonto_Cir_BucoMaxilo <- subset(faltas_ceo_16_17, faltas_ceo_16_17$ESPECIALIDADE=="Odonto/Cir.Buco Maxilo")
 Odonto_ProteseDentaria <- subset(faltas_ceo_16_17, faltas_ceo_16_17$ESPECIALIDADE=="Odonto/Prótese Dentária")
 Odonto_Perio <- subset(faltas_ceo_16_17, faltas_ceo_16_17$ESPECIALIDADE=="Odonto/Perio")
+Odonto_Perio <- na.omit(Odonto_Perio)
 Odontologia <- subset(faltas_ceo_16_17, faltas_ceo_16_17$ESPECIALIDADE=="Odontologia")
 OdontoEspec_CEO <- subset(faltas_ceo_16_17, faltas_ceo_16_17$ESPECIALIDADE=="Odonto Espec/CEO")
 Odonto_Radiologica <- subset(faltas_ceo_16_17, faltas_ceo_16_17$ESPECIALIDADE=="Odonto/Radiológica")
 Odonto_Pediatria <- subset(faltas_ceo_16_17, faltas_ceo_16_17$ESPECIALIDADE=="Odonto/Pediatria")
 Odonto_EstomatologiaBucal <- subset(faltas_ceo_16_17, faltas_ceo_16_17$ESPECIALIDADE=="Odonto/Estomatologia Bucal")
+Odonto_EstomatologiaBucal <- na.omit(Odonto_EstomatologiaBucal)
 
 #lista <- unique(faltas_ceo_16_17$ESPECIALIDADE)
 #lista <- lista %>% as.data.frame()
@@ -192,7 +204,7 @@ Odonto_EstomatologiaBucal <- subset(faltas_ceo_16_17, faltas_ceo_16_17$ESPECIALI
 
 #Falta por especialidade
 Foi feita uma análise para identificar o maior precentual de faltas por especialidade nos anos de 2016 e 2017.
-As únicas variáveis necessárias foram ESPECIALIDADE e FALTAS, porém foi preciso criar uma coluna VALOR, para que fosse possível agregar os valores de falta por especialidade, o resultado foi transformado em duas novas colunas com os valores de FALTA.S e FALTA.N, o percentual foi calculado (FALTA.S / (FALTA.S + FALTA.N) * 100) e atribuido a uma nova coluna, gerando também um gráfico ordenado pelo maior valor. A partir disso, foi decidido usar os bancos das três primeiras especialidades com maior percentual de faltas, que são: Odonto_EstomatologiaBucal, Odonto_Radiologica, Odonto_Perio, para aplicar os algoritmos de machine learning.
+As únicas variáveis necessárias foram ESPECIALIDADE e FALTAS, porém foi preciso criar uma coluna VALOR, para que fosse possível agregar os valores de falta por especialidade, o resultado foi transformado em duas novas colunas com os valores de FALTA.S e FALTA.N, o percentual foi calculado, (FALTA.S / (FALTA.S + FALTA.N) * 100) e atribuido a uma nova coluna, gerando também um gráfico ordenado pelo maior valor. A partir disso, foi decidido usar os bancos das três primeiras especialidades com maior percentual de faltas, que são: Odonto_EstomatologiaBucal, Odonto_Radiologica, Odonto_Perio, para aplicar os algoritmos de machine learning, porém o banco da EstomatologiaBucal tem uma quantidade de dados pequena (850 linhas), e por conta disso não possui muita variância entre os dados de algumas variáveis, o que acabou gerando erros nos testes com os algoritmos, e portanto foi substituido pelo quarto banco na sequência, Odonto_Endodontia.
 ```{r}
 faltas_ceo_16_17_agg <- faltas_ceo_16_17[, c(2,9)] 
 faltas_ceo_16_17_agg['VALOR'] <- 1
@@ -209,57 +221,60 @@ faltas_ceo_16_17_agg <- faltas_ceo_16_17_agg[, c(1,4)]
 
 faltas_ceo_16_17_agg$ESPECIALIDADE <- factor(faltas_ceo_16_17_agg$ESPECIALIDADE, levels = faltas_ceo_16_17_agg$ESPECIALIDADE[order(faltas_ceo_16_17_agg$VALOR_P)])
 
-ggplot(faltas_ceo_16_17_agg, aes(x=ESPECIALIDADE, y=VALOR_P)) +   
+plot_g <- ggplot(faltas_ceo_16_17_agg, aes(x=ESPECIALIDADE, y=VALOR_P)) +   
   geom_bar(aes(fill = VALOR_P), stat="identity") +
   scale_fill_gradient(low = 'green', high = 'red') +
   coord_flip()
   
+ggplotly(plot_g)
 ```
 
 
 #Descrição dos dados
-Descrição dos dados (summary e plot) para os bancos escolhidos.
-Descrição de variáveis;
+Descrição dos dados (summary e plot) para os bancos escolhidos. Os dados dos plots estão em percentual.
+As variáveis foram separadas para cada um dos bancos.
+
+Descrição de variáveis:
 DIA_SEMANA
 ```{r}
 #########################################################################################################################
-#Odonto_EstomatologiaBucal por dia da semana
+#Odonto_Endodontia por dia da semana
 
-dia_semana <- summary(Odonto_EstomatologiaBucal$DIA_SEMANA)
-dia_semana <- as.data.frame(dia_semana)
-dia_semana
+dia_semana_Odonto_Endodontia <- summary(Odonto_Endodontia$DIA_SEMANA)
+dia_semana_Odonto_Endodontia <- as.data.frame(dia_semana_Odonto_Endodontia)
+dia_semana_Odonto_Endodontia
 
-Odonto_EstomatologiaBucal_dia <- Odonto_EstomatologiaBucal[, c('DIA_SEMANA','FALTA')] 
-Odonto_EstomatologiaBucal_dia['VALOR'] <- 1
-Odonto_EstomatologiaBucal_dia$VALOR <- as.numeric(Odonto_EstomatologiaBucal_dia$VALOR)
+Odonto_Endodontia_dia <- Odonto_Endodontia[, c('DIA_SEMANA','FALTA')] 
+Odonto_Endodontia_dia['VALOR'] <- 1
+Odonto_Endodontia_dia$VALOR <- as.numeric(Odonto_Endodontia_dia$VALOR)
 
-Odonto_EstomatologiaBucal_dia <- aggregate(Odonto_EstomatologiaBucal_dia$VALOR, by=list(Odonto_EstomatologiaBucal_dia$DIA_SEMANA, Odonto_EstomatologiaBucal_dia$FALTA), FUN = sum)
+Odonto_Endodontia_dia <- aggregate(Odonto_Endodontia_dia$VALOR, by=list(Odonto_Endodontia_dia$DIA_SEMANA, Odonto_Endodontia_dia$FALTA), FUN = sum)
 
-names(Odonto_EstomatologiaBucal_dia)<- c("DIA_ATD", "FALTA", "VALOR")
+names(Odonto_Endodontia_dia)<- c("DIA_ATD", "FALTA", "VALOR")
 
-Odonto_EstomatologiaBucal_dia <- reshape(Odonto_EstomatologiaBucal_dia, idvar = "DIA_ATD", timevar = "FALTA", direction = "wide")
-
-
-Odonto_EstomatologiaBucal_dia['VALOR_P'] <- (Odonto_EstomatologiaBucal_dia$VALOR.S / (Odonto_EstomatologiaBucal_dia$VALOR.S + Odonto_EstomatologiaBucal_dia$VALOR.N)) * 100
+Odonto_Endodontia_dia <- reshape(Odonto_Endodontia_dia, idvar = "DIA_ATD", timevar = "FALTA", direction = "wide")
 
 
-Odonto_EstomatologiaBucal_dia <- Odonto_EstomatologiaBucal_dia[, c(1,4)] 
+Odonto_Endodontia_dia['VALOR_P'] <- (Odonto_Endodontia_dia$VALOR.S / (Odonto_Endodontia_dia$VALOR.S + Odonto_Endodontia_dia$VALOR.N)) * 100
 
-Odonto_EstomatologiaBucal_dia$DIA_ATD <- factor(Odonto_EstomatologiaBucal_dia$DIA_ATD, levels = Odonto_EstomatologiaBucal_dia$DIA_ATD[order(Odonto_EstomatologiaBucal_dia$VALOR_P)])
 
-ggplot(Odonto_EstomatologiaBucal_dia, aes(x=DIA_ATD, y=VALOR_P)) +   
+Odonto_Endodontia_dia <- Odonto_Endodontia_dia[, c(1,4)] 
+
+Odonto_Endodontia_dia$DIA_ATD <- factor(Odonto_Endodontia_dia$DIA_ATD, levels = Odonto_Endodontia_dia$DIA_ATD[order(Odonto_Endodontia_dia$VALOR_P)])
+
+ggplot(Odonto_Endodontia_dia, aes(x=DIA_ATD, y=VALOR_P)) +   
   geom_bar(aes(fill = VALOR_P), stat="identity") +
-  scale_fill_gradient(low = 'red', high = 'blue') +
-  ggtitle("Faltas por dia da semana Odonto Estomatologia Bucal") +
+  scale_fill_gradient(low = 'green', high = 'red') +
+  ggtitle("Faltas por dia da semana Odonto Endodontia em %") +
   coord_flip()
 
 
 #########################################################################################################################
 #Odonto_Radiologica por dia da semana
 
-dia_semana <- summary(Odonto_Radiologica$DIA_SEMANA)
-dia_semana <- as.data.frame(dia_semana)
-dia_semana
+dia_semana_Odonto_Radiologica <- summary(Odonto_Radiologica$DIA_SEMANA)
+dia_semana_Odonto_Radiologica <- as.data.frame(dia_semana_Odonto_Radiologica)
+dia_semana_Odonto_Radiologica
 
 Odonto_Radiologica_dia <- Odonto_Radiologica[, c('DIA_SEMANA','FALTA')] 
 Odonto_Radiologica_dia['VALOR'] <- 1
@@ -281,17 +296,17 @@ Odonto_Radiologica_dia$DIA_ATD <- factor(Odonto_Radiologica_dia$DIA_ATD, levels 
 
 ggplot(Odonto_Radiologica_dia, aes(x=DIA_ATD, y=VALOR_P)) +   
   geom_bar(aes(fill = VALOR_P), stat="identity") +
-  scale_fill_gradient(low = 'red', high = 'blue') +
-  ggtitle("Faltas por dia da semana Odonto Radiologica") +
+  scale_fill_gradient(low = 'green', high = 'red') +
+  ggtitle("Faltas por dia da semana Odonto Radiologica em %") +
   coord_flip()
 
 
 #########################################################################################################################
 #Odonto_Perio por dia da semana
 
-dia_semana <- summary(Odonto_Perio$DIA_SEMANA)
-dia_semana <- as.data.frame(dia_semana)
-dia_semana
+dia_semana_Odonto_Perio <- summary(Odonto_Perio$DIA_SEMANA)
+dia_semana_Odonto_Perio <- as.data.frame(dia_semana_Odonto_Perio)
+dia_semana_Odonto_Perio
 
 Odonto_Perio_dia <- Odonto_Perio[, c('DIA_SEMANA','FALTA')] 
 Odonto_Perio_dia['VALOR'] <- 1
@@ -313,8 +328,8 @@ Odonto_Perio_dia$DIA_ATD <- factor(Odonto_Perio_dia$DIA_ATD, levels = Odonto_Per
 
 ggplot(Odonto_Perio_dia, aes(x=DIA_ATD, y=VALOR_P)) +   
   geom_bar(aes(fill = VALOR_P), stat="identity") +
-  scale_fill_gradient(low = 'red', high = 'blue') +
-  ggtitle("Faltas por dia da semana Odonto Perio") +
+  scale_fill_gradient(low = 'green', high = 'red') +
+  ggtitle("Faltas por dia da semana Odonto Perio em %") +
   coord_flip()
 
 ```
@@ -322,77 +337,144 @@ ggplot(Odonto_Perio_dia, aes(x=DIA_ATD, y=VALOR_P)) +
 
 SEXO
 ```{r}
-maiores_perc_falta <- rbind(Odonto_EstomatologiaBucal, Odonto_Radiologica, Odonto_Perio)
-maiores_perc_falta <- maiores_perc_falta[, c(2,5,9)]
-
-
-maiores_perc_falta['VALOR'] <- 1
-maiores_perc_falta$VALOR <- as.numeric(maiores_perc_falta$VALOR)
-
-maiores_perc_falta <- aggregate(maiores_perc_falta$VALOR, by=list(maiores_perc_falta$SEXO, maiores_perc_falta$FALTA, maiores_perc_falta$ESPECIALIDADE), FUN = sum)
-
-names(maiores_perc_falta)<- c("SEXO", "FALTA", "ESPECIALIDADE", "VALOR")
-
-maiores_perc_falta <- reshape(maiores_perc_falta, idvar = c("ESPECIALIDADE","SEXO"), timevar = "FALTA", direction = "wide")
-
-
-maiores_perc_falta['VALOR_P'] <- (maiores_perc_falta$VALOR.S / (maiores_perc_falta$VALOR.S + maiores_perc_falta$VALOR.N)) * 100
-
-
-#maiores_perc_falta <- maiores_perc_falta[, c(1,4)] 
-
-#maiores_perc_falta$SEXO <- factor(maiores_perc_falta$SEXO, levels = maiores_perc_falta$SEXO[order(maiores_perc_falta$VALOR_P)])
-
-
-fse <- ggplot(maiores_perc_falta, aes(x=SEXO, y=VALOR_P)) +   
-  geom_bar(aes(fill = ESPECIALIDADE), stat="identity") +
-  ggtitle("Faltas por dia da semana Odonto Perio") +
-  coord_flip()
-
-ggplotly(fse)
-```
-
-
-ESCOLARIDADE
-```{r}
 #########################################################################################################################
-#Odonto_EstomatologiaBucal por dia da semana
+#Odonto_Endodontia por dia da semana
 
-escolaridade <- summary(Odonto_EstomatologiaBucal$ESCOLARIDADE)
-escolaridade <- as.data.frame(escolaridade)
-escolaridade
+sexo_Odonto_Endodontia <- summary(Odonto_Endodontia$SEXO)
+sexo_Odonto_Endodontia <- as.data.frame(sexo_Odonto_Endodontia)
+sexo_Odonto_Endodontia
 
-Odonto_EstomatologiaBucal_escolaridade <- Odonto_EstomatologiaBucal[, c('ESCOLARIDADE','FALTA')] 
-Odonto_EstomatologiaBucal_escolaridade['VALOR'] <- 1
-Odonto_EstomatologiaBucal_escolaridade$VALOR <- as.numeric(Odonto_EstomatologiaBucal_escolaridade$VALOR)
+Odonto_Endodontia_dia <- Odonto_Endodontia[, c('SEXO','FALTA')] 
+Odonto_Endodontia_dia['VALOR'] <- 1
+Odonto_Endodontia_dia$VALOR <- as.numeric(Odonto_Endodontia_dia$VALOR)
 
-Odonto_EstomatologiaBucal_escolaridade <- aggregate(Odonto_EstomatologiaBucal_escolaridade$VALOR, by=list(Odonto_EstomatologiaBucal_escolaridade$ESCOLARIDADE, Odonto_EstomatologiaBucal_escolaridade$FALTA), FUN = sum)
+Odonto_Endodontia_dia <- aggregate(Odonto_Endodontia_dia$VALOR, by=list(Odonto_Endodontia_dia$SEXO, Odonto_Endodontia_dia$FALTA), FUN = sum)
 
-names(Odonto_EstomatologiaBucal_escolaridade)<- c("ESCOLARIDADE", "FALTA", "VALOR")
+names(Odonto_Endodontia_dia)<- c("SEXO", "FALTA", "VALOR")
 
-Odonto_EstomatologiaBucal_escolaridade <- reshape(Odonto_EstomatologiaBucal_escolaridade, idvar = "ESCOLARIDADE", timevar = "FALTA", direction = "wide")
-
-
-Odonto_EstomatologiaBucal_escolaridade['VALOR_P'] <- (Odonto_EstomatologiaBucal_escolaridade$VALOR.S / (Odonto_EstomatologiaBucal_escolaridade$VALOR.S + Odonto_EstomatologiaBucal_escolaridade$VALOR.N)) * 100
+Odonto_Endodontia_dia <- reshape(Odonto_Endodontia_dia, idvar = "SEXO", timevar = "FALTA", direction = "wide")
 
 
-Odonto_EstomatologiaBucal_escolaridade <- Odonto_EstomatologiaBucal_escolaridade[, c(1,4)] 
+Odonto_Endodontia_dia['VALOR_P'] <- (Odonto_Endodontia_dia$VALOR.S / (Odonto_Endodontia_dia$VALOR.S + Odonto_Endodontia_dia$VALOR.N)) * 100
 
-Odonto_EstomatologiaBucal_escolaridade$ESCOLARIDADE <- factor(Odonto_EstomatologiaBucal_escolaridade$ESCOLARIDADE, levels = Odonto_EstomatologiaBucal_escolaridade$ESCOLARIDADE[order(Odonto_EstomatologiaBucal_escolaridade$VALOR_P)])
 
-ggplot(Odonto_EstomatologiaBucal_escolaridade, aes(x=ESCOLARIDADE, y=VALOR_P)) +   
+Odonto_Endodontia_dia <- Odonto_Endodontia_dia[, c(1,4)] 
+
+Odonto_Endodontia_dia$SEXO <- factor(Odonto_Endodontia_dia$SEXO, levels = Odonto_Endodontia_dia$SEXO[order(Odonto_Endodontia_dia$VALOR_P)])
+
+ggplot(Odonto_Endodontia_dia, aes(x=SEXO, y=VALOR_P)) +   
   geom_bar(aes(fill = VALOR_P), stat="identity") +
-  scale_fill_gradient(low = 'red', high = 'blue') +
-  ggtitle("Faltas por escolaridade Odonto Estomatologia Bucal") +
+  scale_fill_gradient(low = 'green', high = 'red') +
+  ggtitle("Faltas por sexo Odonto Endodontia em %") +
   coord_flip()
 
 
 #########################################################################################################################
 #Odonto_Radiologica por dia da semana
 
-escolaridade <- summary(Odonto_Radiologica$ESCOLARIDADE)
-escolaridade <- as.data.frame(escolaridade)
-escolaridade
+sexo_Odonto_Radiologica <- summary(Odonto_Radiologica$SEXO)
+sexo_Odonto_Radiologica <- as.data.frame(sexo_Odonto_Radiologica)
+sexo_Odonto_Radiologica
+
+Odonto_Radiologica_dia <- Odonto_Radiologica[, c('SEXO','FALTA')] 
+Odonto_Radiologica_dia['VALOR'] <- 1
+Odonto_Radiologica_dia$VALOR <- as.numeric(Odonto_Radiologica_dia$VALOR)
+
+Odonto_Radiologica_dia <- aggregate(Odonto_Radiologica_dia$VALOR, by=list(Odonto_Radiologica_dia$SEXO, Odonto_Radiologica_dia$FALTA), FUN = sum)
+
+names(Odonto_Radiologica_dia)<- c("SEXO", "FALTA", "VALOR")
+
+Odonto_Radiologica_dia <- reshape(Odonto_Radiologica_dia, idvar = "SEXO", timevar = "FALTA", direction = "wide")
+
+
+Odonto_Radiologica_dia['VALOR_P'] <- (Odonto_Radiologica_dia$VALOR.S / (Odonto_Radiologica_dia$VALOR.S + Odonto_Radiologica_dia$VALOR.N)) * 100
+
+
+Odonto_Radiologica_dia <- Odonto_Radiologica_dia[, c(1,4)] 
+
+Odonto_Radiologica_dia$SEXO <- factor(Odonto_Radiologica_dia$SEXO, levels = Odonto_Radiologica_dia$SEXO[order(Odonto_Radiologica_dia$VALOR_P)])
+
+ggplot(Odonto_Radiologica_dia, aes(x=SEXO, y=VALOR_P)) +   
+  geom_bar(aes(fill = VALOR_P), stat="identity") +
+  scale_fill_gradient(low = 'green', high = 'red') +
+  ggtitle("Faltas por sexo Odonto Radiologica em %") +
+  coord_flip()
+
+
+#########################################################################################################################
+#Odonto_Perio por dia da semana
+
+sexo_Odonto_Perio <- summary(Odonto_Perio$SEXO)
+sexo_Odonto_Perio <- as.data.frame(sexo_Odonto_Perio)
+sexo_Odonto_Perio
+
+Odonto_Perio_dia <- Odonto_Perio[, c('SEXO','FALTA')] 
+Odonto_Perio_dia['VALOR'] <- 1
+Odonto_Perio_dia$VALOR <- as.numeric(Odonto_Perio_dia$VALOR)
+
+Odonto_Perio_dia <- aggregate(Odonto_Perio_dia$VALOR, by=list(Odonto_Perio_dia$SEXO, Odonto_Perio_dia$FALTA), FUN = sum)
+
+names(Odonto_Perio_dia)<- c("SEXO", "FALTA", "VALOR")
+
+Odonto_Perio_dia <- reshape(Odonto_Perio_dia, idvar = "SEXO", timevar = "FALTA", direction = "wide")
+
+
+Odonto_Perio_dia['VALOR_P'] <- (Odonto_Perio_dia$VALOR.S / (Odonto_Perio_dia$VALOR.S + Odonto_Perio_dia$VALOR.N)) * 100
+
+
+Odonto_Perio_dia <- Odonto_Perio_dia[, c(1,4)] 
+
+Odonto_Perio_dia$SEXO <- factor(Odonto_Perio_dia$SEXO, levels = Odonto_Perio_dia$SEXO[order(Odonto_Perio_dia$VALOR_P)])
+
+ggplot(Odonto_Perio_dia, aes(x=SEXO, y=VALOR_P)) +   
+  geom_bar(aes(fill = VALOR_P), stat="identity") +
+  scale_fill_gradient(low = 'green', high = 'red') +
+  ggtitle("Faltas por sexo Odonto Perio em %") +
+  coord_flip()
+
+```
+
+
+ESCOLARIDADE
+```{r}
+#########################################################################################################################
+#Odonto_Endodontia por dia da semana
+
+escolaridade_Odonto_Endodontia <- summary(Odonto_Endodontia$ESCOLARIDADE)
+escolaridade_Odonto_Endodontia <- as.data.frame(escolaridade_Odonto_Endodontia)
+escolaridade_Odonto_Endodontia
+
+Odonto_Endodontia_escolaridade <- Odonto_Endodontia[, c('ESCOLARIDADE','FALTA')] 
+Odonto_Endodontia_escolaridade['VALOR'] <- 1
+Odonto_Endodontia_escolaridade$VALOR <- as.numeric(Odonto_Endodontia_escolaridade$VALOR)
+
+Odonto_Endodontia_escolaridade <- aggregate(Odonto_Endodontia_escolaridade$VALOR, by=list(Odonto_Endodontia_escolaridade$ESCOLARIDADE, Odonto_Endodontia_escolaridade$FALTA), FUN = sum)
+
+names(Odonto_Endodontia_escolaridade)<- c("ESCOLARIDADE", "FALTA", "VALOR")
+
+Odonto_Endodontia_escolaridade <- reshape(Odonto_Endodontia_escolaridade, idvar = "ESCOLARIDADE", timevar = "FALTA", direction = "wide")
+
+
+Odonto_Endodontia_escolaridade['VALOR_P'] <- (Odonto_Endodontia_escolaridade$VALOR.S / (Odonto_Endodontia_escolaridade$VALOR.S + Odonto_Endodontia_escolaridade$VALOR.N)) * 100
+
+
+Odonto_Endodontia_escolaridade <- Odonto_Endodontia_escolaridade[, c(1,4)] 
+
+Odonto_Endodontia_escolaridade$ESCOLARIDADE <- factor(Odonto_Endodontia_escolaridade$ESCOLARIDADE, levels = Odonto_Endodontia_escolaridade$ESCOLARIDADE[order(Odonto_Endodontia_escolaridade$VALOR_P)])
+
+ggplot(Odonto_Endodontia_escolaridade, aes(x=ESCOLARIDADE, y=VALOR_P)) +   
+  geom_bar(aes(fill = VALOR_P), stat="identity") +
+  scale_fill_gradient(low = 'green', high = 'red') +
+  ggtitle("Faltas por escolaridade Odonto Endodontia em %") +
+  coord_flip()
+
+
+#########################################################################################################################
+#Odonto_Radiologica por dia da semana
+
+escolaridade_Odonto_Radiologica <- summary(Odonto_Radiologica$ESCOLARIDADE)
+escolaridade_Odonto_Radiologica <- as.data.frame(escolaridade_Odonto_Radiologica)
+escolaridade_Odonto_Radiologica
 
 Odonto_Radiologica_escolaridade <- Odonto_Radiologica[, c('ESCOLARIDADE','FALTA')] 
 Odonto_Radiologica_escolaridade['VALOR'] <- 1
@@ -414,17 +496,17 @@ Odonto_Radiologica_escolaridade$ESCOLARIDADE <- factor(Odonto_Radiologica_escola
 
 ggplot(Odonto_Radiologica_escolaridade, aes(x=ESCOLARIDADE, y=VALOR_P)) +   
   geom_bar(aes(fill = VALOR_P), stat="identity") +
-  scale_fill_gradient(low = 'red', high = 'blue') +
-  ggtitle("Faltas por escolaridade Odonto Radiologica") +
+  scale_fill_gradient(low = 'green', high = 'red') +
+  ggtitle("Faltas por escolaridade Odonto Radiologica em %") +
   coord_flip()
 
 
 #########################################################################################################################
 #Odonto_Perio por dia da semana
 
-escolaridade <- summary(Odonto_Perio$ESCOLARIDADE)
-escolaridade <- as.data.frame(escolaridade)
-escolaridade
+escolaridade_Odonto_Perio <- summary(Odonto_Perio$ESCOLARIDADE)
+escolaridade_Odonto_Perio <- as.data.frame(escolaridade_Odonto_Perio)
+escolaridade_Odonto_Perio
 
 Odonto_Perio_escolaridade <- Odonto_Perio[, c('ESCOLARIDADE','FALTA')] 
 Odonto_Perio_escolaridade['VALOR'] <- 1
@@ -446,54 +528,52 @@ Odonto_Perio_escolaridade$ESCOLARIDADE <- factor(Odonto_Perio_escolaridade$ESCOL
 
 ggplot(Odonto_Perio_escolaridade, aes(x=ESCOLARIDADE, y=VALOR_P)) +   
   geom_bar(aes(fill = VALOR_P), stat="identity") +
-  scale_fill_gradient(low = 'red', high = 'blue') +
-  ggtitle("Faltas por escolaridade Odonto Perio") +
+  scale_fill_gradient(low = 'green', high = 'red') +
+  ggtitle("Faltas por escolaridade Odonto Perio em %") +
   coord_flip()
-
 ```
-
 
 
 PERIODO_ATD
 ```{r}
 #########################################################################################################################
-#Odonto_EstomatologiaBucal por dia da semana
+#Odonto_Endodontia por dia da semana
 
-periodo_atd <- summary(Odonto_EstomatologiaBucal$PERIODO_ATD)
-periodo_atd <- as.data.frame(periodo_atd)
-periodo_atd
+periodo_atd_Odonto_Endodontia <- summary(Odonto_Endodontia$PERIODO_ATD)
+periodo_atd_Odonto_Endodontia <- as.data.frame(periodo_atd_Odonto_Endodontia)
+periodo_atd_Odonto_Endodontia
 
-Odonto_EstomatologiaBucal_periodo <- Odonto_EstomatologiaBucal[, c('PERIODO_ATD','FALTA')] 
-Odonto_EstomatologiaBucal_periodo['VALOR'] <- 1
-Odonto_EstomatologiaBucal_periodo$VALOR <- as.numeric(Odonto_EstomatologiaBucal_periodo$VALOR)
+Odonto_Endodontia_periodo <- Odonto_Endodontia[, c('PERIODO_ATD','FALTA')] 
+Odonto_Endodontia_periodo['VALOR'] <- 1
+Odonto_Endodontia_periodo$VALOR <- as.numeric(Odonto_Endodontia_periodo$VALOR)
 
-Odonto_EstomatologiaBucal_periodo <- aggregate(Odonto_EstomatologiaBucal_periodo$VALOR, by=list(Odonto_EstomatologiaBucal_periodo$PERIODO_ATD, Odonto_EstomatologiaBucal_periodo$FALTA), FUN = sum)
+Odonto_Endodontia_periodo <- aggregate(Odonto_Endodontia_periodo$VALOR, by=list(Odonto_Endodontia_periodo$PERIODO_ATD, Odonto_Endodontia_periodo$FALTA), FUN = sum)
 
-names(Odonto_EstomatologiaBucal_periodo)<- c("PERIODO_ATD", "FALTA", "VALOR")
+names(Odonto_Endodontia_periodo)<- c("PERIODO_ATD", "FALTA", "VALOR")
 
-Odonto_EstomatologiaBucal_periodo <- reshape(Odonto_EstomatologiaBucal_periodo, idvar = "PERIODO_ATD", timevar = "FALTA", direction = "wide")
-
-
-Odonto_EstomatologiaBucal_periodo['VALOR_P'] <- (Odonto_EstomatologiaBucal_periodo$VALOR.S / (Odonto_EstomatologiaBucal_periodo$VALOR.S + Odonto_EstomatologiaBucal_periodo$VALOR.N)) * 100
+Odonto_Endodontia_periodo <- reshape(Odonto_Endodontia_periodo, idvar = "PERIODO_ATD", timevar = "FALTA", direction = "wide")
 
 
-Odonto_EstomatologiaBucal_periodo <- Odonto_EstomatologiaBucal_periodo[, c(1,4)] 
+Odonto_Endodontia_periodo['VALOR_P'] <- (Odonto_Endodontia_periodo$VALOR.S / (Odonto_Endodontia_periodo$VALOR.S + Odonto_Endodontia_periodo$VALOR.N)) * 100
 
-Odonto_EstomatologiaBucal_periodo$PERIODO_ATD <- factor(Odonto_EstomatologiaBucal_periodo$PERIODO_ATD, levels = Odonto_EstomatologiaBucal_periodo$PERIODO_ATD[order(Odonto_EstomatologiaBucal_periodo$VALOR_P)])
 
-ggplot(Odonto_EstomatologiaBucal_periodo, aes(x=PERIODO_ATD, y=VALOR_P)) +   
+Odonto_Endodontia_periodo <- Odonto_Endodontia_periodo[, c(1,4)] 
+
+Odonto_Endodontia_periodo$PERIODO_ATD <- factor(Odonto_Endodontia_periodo$PERIODO_ATD, levels = Odonto_Endodontia_periodo$PERIODO_ATD[order(Odonto_Endodontia_periodo$VALOR_P)])
+
+ggplot(Odonto_Endodontia_periodo, aes(x=PERIODO_ATD, y=VALOR_P)) +   
   geom_bar(aes(fill = VALOR_P), stat="identity") +
-  scale_fill_gradient(low = 'red', high = 'blue') +
-  ggtitle("Faltas por periodo de atendimento Odonto Estomatologia Bucal") +
+  scale_fill_gradient(low = 'green', high = 'red') +
+  ggtitle("Faltas por periodo de atendimento Odonto Endodontia em %") +
   coord_flip()
 
 
 #########################################################################################################################
 #Odonto_Radiologica por dia da semana
 
-periodo_atd <- summary(Odonto_Radiologica$PERIODO_ATD)
-periodo_atd <- as.data.frame(periodo_atd)
-periodo_atd
+periodo_atd_Odonto_Radiologica <- summary(Odonto_Radiologica$PERIODO_ATD)
+periodo_atd_Odonto_Radiologica <- as.data.frame(periodo_atd_Odonto_Radiologica)
+periodo_atd_Odonto_Radiologica
 
 Odonto_Radiologica_periodo <- Odonto_Radiologica[, c('PERIODO_ATD','FALTA')] 
 Odonto_Radiologica_periodo['VALOR'] <- 1
@@ -515,17 +595,17 @@ Odonto_Radiologica_periodo$PERIODO_ATD <- factor(Odonto_Radiologica_periodo$PERI
 
 ggplot(Odonto_Radiologica_periodo, aes(x=PERIODO_ATD, y=VALOR_P)) +   
   geom_bar(aes(fill = VALOR_P), stat="identity") +
-  scale_fill_gradient(low = 'red', high = 'blue') +
-  ggtitle("Faltas por periodo de atendimento Odonto Radiologica") +
+  scale_fill_gradient(low = 'green', high = 'red') +
+  ggtitle("Faltas por periodo de atendimento Odonto Radiologica em %") +
   coord_flip()
 
 
 #########################################################################################################################
 #Odonto_Perio por dia da semana
 
-periodo_atd <- summary(Odonto_Perio$PERIODO_ATD)
-periodo_atd <- as.data.frame(periodo_atd)
-periodo_atd
+periodo_atd_Odonto_Perio <- summary(Odonto_Perio$PERIODO_ATD)
+periodo_atd_Odonto_Perio <- as.data.frame(periodo_atd_Odonto_Perio)
+periodo_atd_Odonto_Perio
 
 Odonto_Perio_periodo <- Odonto_Perio[, c('PERIODO_ATD','FALTA')] 
 Odonto_Perio_periodo['VALOR'] <- 1
@@ -547,22 +627,22 @@ Odonto_Perio_periodo$PERIODO_ATD <- factor(Odonto_Perio_periodo$PERIODO_ATD, lev
 
 ggplot(Odonto_Perio_periodo, aes(x=PERIODO_ATD, y=VALOR_P)) +   
   geom_bar(aes(fill = VALOR_P), stat="identity") +
-  scale_fill_gradient(low = 'red', high = 'blue') +
-  ggtitle("Faltas por periodo de atendimento Odonto Perio") +
+  scale_fill_gradient(low = 'green', high = 'red') +
+  ggtitle("Faltas por periodo de atendimento Odonto Perio em %") +
   coord_flip()
 ```
 
 
-
 #Função para aplicar os modelos de machine learning
 Foi criada uma função que recebe como parametro o nome de um banco e aplica vários modelos de machine learning para retornar o que apresentar melhor resultado.
-Para aplicar os modelos é preciso separar o banco em treino (75% da amostra) e teste (25% da amostra), também é necessário criar um "controle", que inclui método (repeated cross-validation), number (número de folds), repeats (número de iterações para cada fold), sampling (para balancear os dados).
-Foram escolhidos dez modelos de machine learning, que são: "glm" = Generalized Linear Model, "ranger" = Random Forest, "knn" = k-Nearest Neighbors, "nnet" = Neural Network, "dnn" = Stacked AutoEncoder Deep Neural Network, "xgbTree" = eXtreme Gradient Boosting, "gbm" = Stochastic Gradient Boosting, "adaboost" = AdaBoost Classification Trees, "glmStepAIC" = Generalized Linear Model with Stepwise Feature Selection, "nb" = Naive Bayes.
-Os modelos são colocados em uma lista e com um método WHILE, a função executa todos os modelos da mesma. No final de cada execução é preciso verificar se o modelo é realmente útil para o propósito de classificação, para isso foi escolhida o valor preditivo negativo como instrumento de avaliação. A função retorna a matriz de confusão para a predição do melhor modelo.
+Para aplicar os modelos é preciso separar o banco em treino (75% da amostra) e teste (25% da amostra), também é necessário criar um "controle", que inclui método (repeated cross-validation), number (número de folds), repeats (número de iterações para cada fold), sampling (para balancear os dados). O número de folds usado foi 10, com 5 repetições.
+Foram escolhidos nove modelos de machine learning, que são: "glm" = Generalized Linear Model, "ranger" = Random Forest, "knn" = k-Nearest Neighbors, "nnet" = Neural Network, "dnn" = Stacked AutoEncoder Deep Neural Network, "xgbTree" = eXtreme Gradient Boosting, "gbm" = Stochastic Gradient Boosting, "adaboost" = AdaBoost Classification Trees, "glmStepAIC" = Generalized Linear Model with Stepwise Feature Selection.
+Os modelos são colocados em uma lista e com um método WHILE, a função executa todos os modelos da mesma. No final de cada execução é preciso verificar se o modelo é realmente útil para o propósito de classificação, para isso foi escolhido o valor preditivo negativo como instrumento de avaliação. A função retorna a matriz de confusão para a predição do melhor modelo.
 ```{r}
 ml_models <- function(nome_banco){
   
   ##################################################################################
+  #Para fazer o desenho da matriz de confusão
   draw_confusion_matrix <- function(cm) {
 
   layout(matrix(c(1,1,2)))
@@ -571,14 +651,14 @@ ml_models <- function(nome_banco){
   title('CONFUSION MATRIX', cex.main=2)
 
   # create the matrix 
-  rect(150, 430, 240, 370, col='#3F97D0')
-  text(195, 435, 'Class1', cex=1.2)
-  rect(250, 430, 340, 370, col='#F7AD50')
-  text(295, 435, 'Class2', cex=1.2)
-  text(125, 370, 'Predicted', cex=1.3, srt=90, font=2)
-  text(245, 450, 'Actual', cex=1.3, font=2)
-  rect(150, 305, 240, 365, col='#F7AD50')
-  rect(250, 305, 340, 365, col='#3F97D0')
+  rect(150, 430, 240, 370, col='red')
+  text(195, 435, 'Não', cex=1.2)
+  rect(250, 430, 340, 370, col='green')
+  text(295, 435, 'Sim', cex=1.2)
+  text(125, 370, 'Predição', cex=1.3, srt=90, font=2)
+  text(245, 450, 'Referência', cex=1.3, font=2)
+  rect(150, 305, 240, 365, col='green')
+  rect(250, 305, 340, 365, col='red')
   text(140, 400, 'Não', cex=1.2, srt=90)
   text(140, 335, 'Sim', cex=1.2, srt=90)
 
@@ -590,7 +670,7 @@ ml_models <- function(nome_banco){
   text(295, 335, res[4], cex=1.6, font=2, col='white')
 
   # add in the specifics 
-  plot(c(100, 0), c(100, 0), type = "n", xlab="", ylab="", main = "DETAILS", xaxt='n', yaxt='n')
+  plot(c(100, 0), c(100, 0), type = "n", xlab="", ylab="", main = "DETALHES", xaxt='n', yaxt='n')
   text(10, 85, names(cm$byClass[1]), cex=1.2, font=2)
   text(10, 70, round(as.numeric(cm$byClass[1]), 3), cex=1.2)
   text(30, 85, names(cm$byClass[2]), cex=1.2, font=2)
@@ -607,11 +687,11 @@ ml_models <- function(nome_banco){
   text(30, 20, round(as.numeric(cm$overall[1]), 3), cex=1.4)
   text(70, 35, names(cm$overall[2]), cex=1.5, font=2)
   text(70, 20, round(as.numeric(cm$overall[2]), 3), cex=1.4)
-}  
+  }  
   ##################################################################################
   
   set.seed(2)
-  
+  #removendo os valores NA do banco
   banco_escolhido <- na.omit(nome_banco)
 
   ## Criando a amostra de treino com 75% do tamanho da amostra total e amostra de teste com 25%
@@ -621,51 +701,69 @@ ml_models <- function(nome_banco){
   
   train <- banco_escolhido[train_ind, ]
   test <- banco_escolhido[-train_ind, ]
-  
+  #são criadas três variáveis que recebem os bancos de train_prep (treino), test_prep (sem a coluna da variável de desfecho, para aplicar   o modelo e classificar) e test_control (com a coluna da variável de desfecho, para comparar com a predição.) 
   train_prep <- train
-  test_prep <- test
+  test_prep <- test[, -c(9)]
+  test_control <- test
   
   table(train_prep$FALTA)
+  
+  #verifica a variancia das variáveis e remove caso seja 0 ou próximo de 0
+  nzv_cols <- nearZeroVar(train_prep)
+  if(length(nzv_cols) > 0) train_prep <- train_prep[, -nzv_cols]
+  
   
   #Create train/test index
   # Create trainControl object: myControl - Deve ser utilizado em todos os modelos para que sejam comparáveis
   myControl <- trainControl(
-    method = "repeatedcv", #"repeatedcv" faz com que as repetições rodem
-    number = 3, #number é o número de folds
-    repeats = 3, #repeats é o número de repetições para cada fold. Nesse caso 5 repetições para cada fold
+    method = "repeatedcv", #"repeatedcv" é o método para realizar as repetições
+    number = 10, #number é o número de folds
+    repeats = 5, #repeats é o número de repetições para cada fold
     summaryFunction = twoClassSummary,
     classProbs = TRUE, # IMPORTANT!
-    verboseIter = TRUE,
+    verboseIter = FALSE,
     savePredictions = TRUE,
     returnResamp = "all",
-    sampling = "up" #balanceamento dos dados
+    sampling = "smote" #balanceamento dos dados
+    
   )
+  
+  
   
   #lista de modelos que serão usados inicialmente 
   # "glm" = Generalized Linear Model, "ranger" = Random Forest, "knn" = k-Nearest Neighbors, 
   #"nnet" = Neural Network, "dnn" = Stacked AutoEncoder Deep Neural Network, 
   #"xgbTree" = eXtreme Gradient Boosting, "gbm" = Stochastic Gradient Boosting, "adaboost" = AdaBoost Classification Trees,
-  #"glmStepAIC" = Generalized Linear Model with Stepwise Feature Selection, "nb" = Naive Bayes
+  #"glmStepAIC" = Generalized Linear Model with Stepwise Feature Selection
   
   # "glm", "ranger", "knn", "nb", "gbm", "nnet", "adaboost", "xgbTree", "dnn", "glmStepAIC"
-  modelos = c("glm")
+  modelos = c("glm", "ranger", "knn", "gbm", "nnet", "adaboost", "xgbTree", "dnn", "glmStepAIC")
   
-  i <- 1
-  index <- 1
-  maior_valor <- 0
+  i <- 1 #indice para atualizar o while
+  index <- 1 #indice que retorna o modelo da lista
+  maior_valor <- 0 #usado para verificar qual o modelo com maior valor preditivo negativo.
   
+  #loop para selecionar o melhor algoritmo
   while(i <= length((modelos))) {
     
     # Fit model
     model <- train(
-    FALTA ~ ., 
-    data = train_prep[, -c(2)],
+    FALTA ~ ., #variável de desfecho
+    data = train_prep, #banco de treino
     preProcess = c("center", "scale"),
-    metric = "ROC",
-    method = modelos[index],
-    trControl = myControl
+    metric = "ROC", # métrica para comparação dos modelos
+    method = modelos[index], #lista com indice (retorna uma string com o nome do método para cada modelo)
+    trControl = myControl #aplica o controle
     
     )
+    
+    #fazendo a matriz de confusão para o banco de treino    
+    banco_model <- model$trainingData
+
+    banco_model$.outcome <- as.factor(banco_model$.outcome)
+
+    cm_t <- confusionMatrix(banco_model$.outcome, sample(banco_model$.outcome))
+    
 
     # Print model to console
     model
@@ -673,37 +771,79 @@ ml_models <- function(nome_banco){
     # Print maximum ROC statistic
     max(model[["results"]][["ROC"]])
     
-    #predição dos modelos
-    predictions <- predict(model, test_prep[, -c(2)])
-    cm <- confusionMatrix(predictions, test_prep$FALTA)
-    cm_p <- draw_confusion_matrix(cm)
+    #predição dos modelos no banco test_prep (que não possui a variável de desfecho - FALTA)
+    predictions <- predict(model, test_prep)
+    #o test_control é usado para comparação com os valores da predição, gerando a matriz de confusão.
+    cm <- confusionMatrix(predictions, test_control$FALTA)
     
+    #extraindo os resultados da matriz de confusão
     b <- cm$byClass %>% as.list()
 
+    #extraindo o valor preditivo negativo da lista
     neg_pred <- b[4] %>% as.data.frame()
     neg_pred <- neg_pred$Neg.Pred.Value
     
+    #verificação do maior valor preditivo negativo, como inicialmente o maior valor está atribuído como 0, o primeiro modelo sempre terá     o maior valor, ou seja, sempre que um modelo conseguir alcançar um valor preditivo negativo maior que o armazenado na memória, este      passa a ser o instrumento de verificação.
     if(neg_pred > maior_valor){
-      maior_valor <- neg_pred
-      resultado <- paste("O melhor modelo foi: ", modelos[index], ", com o valor de: ", neg_pred)
-      cm <- cm
-      model <- model
-      cm_p <- cm_p
+      maior_valor <- neg_pred #valor preditivo negativo passa a ser o maior valor
+      resultado <- paste("O melhor modelo foi: ", modelos[index], ", com o valor preditio negativo: ", neg_pred) #mensagem para informar       o modelo com melhor resultado
+      cm <- cm #cm armazena os dados da matriz de confusão (teste) do melhor modelo
+      cm_t <- cm_t #cm_t armazena os dados da matriz de confusão (treino) do melhor modelo
     }
     else{
-      maior_valor <- maior_valor
+      maior_valor <- maior_valor #caso a verificação falhe, o maior_valor continua sendo ele mesmo ("atual")
     }
     
+    #atualiza o indice para o i (while), e index (lista de modelos)
     i <- i + 1
     index <- index + 1
     
   }
-    
-
-  #retorno da função
-  return(list(model, cm, resultado))
+    #desenha a matriz de confusão para o cm armazenado com o melhor modelo
+    cm_p <- draw_confusion_matrix(cm)  
+  
+  #retorno da função (matriz de confusão de treino (cm_t), mensagem de resultado (resultado), desenho da matriz de confusão de teste       (cm_p))
+  return(list(cm_t, resultado, cm_p))
   
 }
 
+
+```
+
+
+```{r}
+# Parallel Processing
+cl <- makePSOCKcluster(5)
+registerDoParallel(cl)
+```
+
+
+#Aplicação da função
+A função foi aplicada nos três bancos, retornando o resultados da matriz de confusão para treino, o modelo com melhor resultado de valor preditivo negativo e um plot da matriz de confusão para a predição no teste.
+Para o banco: Odonto_Endodontia. Os resultados foram:
+```{r}
+
+ml_models(Odonto_Endodontia)
+
+```
+
+Para o banco: Odonto_Radiologica. Os resultados foram:
+```{r}
+
+ml_models(Odonto_Radiologica)
+
+```
+
+Para o banco: Odonto_Perio. Os resultados foram:
+```{r}
+
+ml_models(Odonto_Perio)
+
+```
+
+
+```{r}
+# stop Parallel Processing
+stopCluster(cl)
 ```
 
