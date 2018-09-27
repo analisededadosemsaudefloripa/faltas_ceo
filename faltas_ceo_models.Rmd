@@ -1,16 +1,16 @@
 ---
-title: "faltas_ceo_models"
+title: "faltas_ceo_variaveis"
 output: 
-  word_document:
-    reference_docx: template.docx
-  #html_document:
-  #  toc: true
-  #  toc_depth: 5
-  #  toc_float: true
-  #  collapsed: true
-  #  fig_width: 9
-  #  fig_height: 7
-  #  code_folding: hide
+  #word_document:
+    #reference_docx: template.docx
+  html_document:
+    toc: true
+    toc_depth: 5
+    toc_float: true
+    collapsed: true
+    fig_width: 9
+    fig_height: 7
+    code_folding: hide
 ---
 
 
@@ -69,6 +69,7 @@ faltas_ceo <- read_csv("faltas_ceo.csv")
 ```
 
 #Função para remover acentos
+Esta função serve para remover os acentos.
 ```{r}
 rm_accent <- function(str,pattern="all") {
   # Rotinas e funções úteis V 1.0
@@ -172,8 +173,66 @@ faltas_ceo$ESCOLARIDADE <- as.factor(faltas_ceo$ESCOLARIDADE)
 ```
 
 
+#Percentual de faltas por especialidade de 2014 até 2017
+Gráficos do percentual de faltas por especialidade de 2014 até 2017.
+Para calcular, é adicionada uma coluna preenchida com valores 1, que serve para ajudar a agregar as faltas e não faltas, e somar a contagem por especialidade. Depois foi feito o calculo da percentual de faltantes por especialidade, (FALTAS / (FALTAS + NÃO FALTAS)) * 100. E por fim, o resultado gerando um gráfico de radar.
+```{r}
+faltas_ceo_agg <- faltas_ceo[, c(2,9)] 
+faltas_ceo_agg['VALOR'] <- 1
+faltas_ceo_agg$VALOR <- as.numeric(faltas_ceo_agg$VALOR)
+
+faltas_ceo_agg <- aggregate(faltas_ceo_agg$VALOR, by=list(faltas_ceo_agg$ESPECIALIDADE, faltas_ceo_agg$FALTA), FUN = sum)
+
+names(faltas_ceo_agg)<- c("ESPECIALIDADE", "FALTA", "VALOR")
+
+faltas_ceo_agg <- reshape(faltas_ceo_agg, idvar = "ESPECIALIDADE", timevar = "FALTA", direction = "wide")
+
+faltas_ceo_agg['VALOR_P'] <- (faltas_ceo_agg$VALOR.S / (faltas_ceo_agg$VALOR.S + faltas_ceo_agg$VALOR.N)) * 100
+
+faltas_ceo_agg <- faltas_ceo_agg[, c(1,4)] 
+
+faltas_ceo_agg$ESPECIALIDADE <- factor(faltas_ceo_agg$ESPECIALIDADE, levels = faltas_ceo_agg$ESPECIALIDADE[order(faltas_ceo_agg$VALOR_P)])
+
+plot_g <- ggplot(faltas_ceo_agg, aes(x=ESPECIALIDADE, y=VALOR_P)) +
+  ggtitle("Percentual de faltas por especialidade (2014 e 2017)") +
+  geom_bar(aes(fill = VALOR_P), stat="identity") +
+  scale_fill_gradient(low = 'green', high = 'red') +
+  coord_flip()
+
+ggplotly(plot_g)
+
+spiderplot_total <- faltas_ceo_agg
+spiderplot_total['Total'] <- c(100)
+especialidades_total <- spiderplot_total$ESPECIALIDADE
+especialidades_total %>% as.list()
+
+p <- plot_ly(
+    type = 'scatterpolar',
+    r = c(spiderplot_total$VALOR_P),
+    theta = especialidades_total[1:9],
+    fill = 'toself'
+  ) %>%
+  layout(
+    title = "Percentual de faltas por especialidade (2014 e 2017)",
+    polar = list(
+      radialaxis = list(
+        visible = T,
+        range = c(0, 100)
+      )
+    ),
+    showlegend = F
+  )
+#p
+```
+
+```{r}
+summary(spiderplot_total)
+
+```
+
+
 #Separando o banco
-Foram removidas da coluna DATA_ATD o dia e o mes, com o propósito de cortar o banco apenas para os anos de 2016 e 2017;
+Foram removidas da coluna DATA_ATD (dd/mm/aaaa) o dia e o mes, sobrando apenas (aaaa), com o propósito de cortar o banco apenas para os anos de 2016 e 2017;
 E depois separados em nove novos bancos, ou seja, um banco para cada especialidade.
 É aplicada a função na.omit() nos três bancos que serão usados na análise.
 ```{r}
@@ -215,18 +274,44 @@ faltas_ceo_16_17_agg <- aggregate(faltas_ceo_16_17_agg$VALOR, by=list(faltas_ceo
 names(faltas_ceo_16_17_agg)<- c("ESPECIALIDADE", "FALTA", "VALOR")
 
 faltas_ceo_16_17_agg <- reshape(faltas_ceo_16_17_agg, idvar = "ESPECIALIDADE", timevar = "FALTA", direction = "wide")
+
 faltas_ceo_16_17_agg['VALOR_P'] <- (faltas_ceo_16_17_agg$VALOR.S / (faltas_ceo_16_17_agg$VALOR.S + faltas_ceo_16_17_agg$VALOR.N)) * 100
 
 faltas_ceo_16_17_agg <- faltas_ceo_16_17_agg[, c(1,4)] 
 
 faltas_ceo_16_17_agg$ESPECIALIDADE <- factor(faltas_ceo_16_17_agg$ESPECIALIDADE, levels = faltas_ceo_16_17_agg$ESPECIALIDADE[order(faltas_ceo_16_17_agg$VALOR_P)])
 
-plot_g <- ggplot(faltas_ceo_16_17_agg, aes(x=ESPECIALIDADE, y=VALOR_P)) +   
+plot_g <- ggplot(faltas_ceo_16_17_agg, aes(x=ESPECIALIDADE, y=VALOR_P)) +
+  ggtitle("Percentual de faltas por especialidade (2016 e 2017)") +
   geom_bar(aes(fill = VALOR_P), stat="identity") +
   scale_fill_gradient(low = 'green', high = 'red') +
   coord_flip()
-  
+
 ggplotly(plot_g)
+
+spiderplot <- faltas_ceo_16_17_agg
+spiderplot['Total'] <- c(100)
+especialidades <- spiderplot$ESPECIALIDADE
+especialidades %>% as.list()
+
+p <- plot_ly(
+    type = 'scatterpolar',
+    r = c(spiderplot$VALOR_P),
+    theta = especialidades[1:9],
+    fill = 'toself'
+  ) %>%
+  layout(
+    title = "Percentual de faltas por especialidade (2016 e 2017)",
+    polar = list(
+      radialaxis = list(
+        visible = T,
+        range = c(0, 100)
+      )
+    ),
+    showlegend = F
+  )
+#p
+
 ```
 
 
@@ -636,7 +721,7 @@ ggplot(Odonto_Perio_periodo, aes(x=PERIODO_ATD, y=VALOR_P)) +
 #Função para aplicar os modelos de machine learning
 Foi criada uma função que recebe como parametro o nome de um banco e aplica vários modelos de machine learning para retornar o que apresentar melhor resultado.
 Para aplicar os modelos é preciso separar o banco em treino (75% da amostra) e teste (25% da amostra), também é necessário criar um "controle", que inclui método (repeated cross-validation), number (número de folds), repeats (número de iterações para cada fold), sampling (para balancear os dados). O número de folds usado foi 10, com 5 repetições.
-Foram escolhidos nove modelos de machine learning, que são: "glm" = Generalized Linear Model, "ranger" = Random Forest, "knn" = k-Nearest Neighbors, "nnet" = Neural Network, "dnn" = Stacked AutoEncoder Deep Neural Network, "xgbTree" = eXtreme Gradient Boosting, "gbm" = Stochastic Gradient Boosting, "adaboost" = AdaBoost Classification Trees, "glmStepAIC" = Generalized Linear Model with Stepwise Feature Selection.
+Foram escolhidos oito modelos de machine learning, que são: "glm" = Generalized Linear Model, "ranger" = Random Forest, "knn" = k-Nearest Neighbors, "nnet" = Neural Network, "dnn" = Stacked AutoEncoder Deep Neural Network, "xgbTree" = eXtreme Gradient Boosting, "gbm" = Stochastic Gradient Boosting, "adaboost" = AdaBoost Classification Trees.
 Os modelos são colocados em uma lista e com um método WHILE, a função executa todos os modelos da mesma. No final de cada execução é preciso verificar se o modelo é realmente útil para o propósito de classificação, para isso foi escolhido o valor preditivo negativo como instrumento de avaliação. A função retorna a matriz de confusão para a predição do melhor modelo.
 ```{r}
 ml_models <- function(nome_banco){
@@ -733,11 +818,10 @@ ml_models <- function(nome_banco){
   #lista de modelos que serão usados inicialmente 
   # "glm" = Generalized Linear Model, "ranger" = Random Forest, "knn" = k-Nearest Neighbors, 
   #"nnet" = Neural Network, "dnn" = Stacked AutoEncoder Deep Neural Network, 
-  #"xgbTree" = eXtreme Gradient Boosting, "gbm" = Stochastic Gradient Boosting, "adaboost" = AdaBoost Classification Trees,
-  #"glmStepAIC" = Generalized Linear Model with Stepwise Feature Selection
+  #"xgbTree" = eXtreme Gradient Boosting, "gbm" = Stochastic Gradient Boosting, "adaboost" = AdaBoost Classification Trees.
   
-  # "glm", "ranger", "knn", "nb", "gbm", "nnet", "adaboost", "xgbTree", "dnn", "glmStepAIC"
-  modelos = c("glm", "ranger", "knn", "gbm", "nnet", "adaboost", "xgbTree", "dnn", "glmStepAIC")
+  # "glm", "ranger", "knn", "gbm", "nnet", "adaboost", "xgbTree", "dnn"
+  modelos = c("glm", "ranger", "knn", "gbm", "nnet", "adaboost", "xgbTree", "dnn")
   
   i <- 1 #indice para atualizar o while
   index <- 1 #indice que retorna o modelo da lista
@@ -812,9 +896,11 @@ ml_models <- function(nome_banco){
 
 
 ```{r}
+'
 # Parallel Processing
 cl <- makePSOCKcluster(5)
 registerDoParallel(cl)
+'
 ```
 
 
@@ -822,28 +908,30 @@ registerDoParallel(cl)
 A função foi aplicada nos três bancos, retornando o resultados da matriz de confusão para treino, o modelo com melhor resultado de valor preditivo negativo e um plot da matriz de confusão para a predição no teste.
 Para o banco: Odonto_Endodontia. Os resultados foram:
 ```{r}
-
+'
 ml_models(Odonto_Endodontia)
-
+'
 ```
 
 Para o banco: Odonto_Radiologica. Os resultados foram:
 ```{r}
-
+'
 ml_models(Odonto_Radiologica)
-
+'
 ```
 
 Para o banco: Odonto_Perio. Os resultados foram:
 ```{r}
-
+'
 ml_models(Odonto_Perio)
-
+'
 ```
 
 
 ```{r}
+'
 # stop Parallel Processing
 stopCluster(cl)
+'
 ```
 
