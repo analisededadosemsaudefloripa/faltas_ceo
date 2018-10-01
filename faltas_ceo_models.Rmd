@@ -174,8 +174,9 @@ faltas_ceo$ESCOLARIDADE <- as.factor(faltas_ceo$ESCOLARIDADE)
 
 
 #Percentual de faltas por especialidade de 2014 até 2017
-Gráficos do percentual de faltas por especialidade de 2014 até 2017.
-Para calcular, é adicionada uma coluna preenchida com valores 1, que serve para ajudar a agregar as faltas e não faltas, e somar a contagem por especialidade. Depois foi feito o calculo da percentual de faltantes por especialidade, (FALTAS / (FALTAS + NÃO FALTAS)) * 100. E por fim, o resultado gerando um gráfico de radar.
+Gráfico de radar apresentando o percentual das faltas por especialidade nos anos de 2014 até 2017, para as nove especialidades, sem distinção por variáveis (escolaridade, sexo, dia da semana, periodo de atendimento, unidade referência, idade), ou seja o valor total.
+
+Para calcular, é adicionada uma coluna preenchida com valores 1, que serve para ajudar a agregar as faltas e não faltas, e somar a contagem por especialidade. Depois foi feito o calculo da percentual de faltantes por especialidade, (FALTAS / (FALTAS + NÃO FALTAS)) * 100. E por fim, o resultado gerando o gráfico de radar.
 ```{r}
 faltas_ceo_agg <- faltas_ceo[, c(2,9)] 
 faltas_ceo_agg['VALOR'] <- 1
@@ -192,14 +193,6 @@ faltas_ceo_agg['VALOR_P'] <- (faltas_ceo_agg$VALOR.S / (faltas_ceo_agg$VALOR.S +
 faltas_ceo_agg <- faltas_ceo_agg[, c(1,4)] 
 
 faltas_ceo_agg$ESPECIALIDADE <- factor(faltas_ceo_agg$ESPECIALIDADE, levels = faltas_ceo_agg$ESPECIALIDADE[order(faltas_ceo_agg$VALOR_P)])
-
-plot_g <- ggplot(faltas_ceo_agg, aes(x=ESPECIALIDADE, y=VALOR_P)) +
-  ggtitle("Percentual de faltas por especialidade (2014 e 2017)") +
-  geom_bar(aes(fill = VALOR_P), stat="identity") +
-  scale_fill_gradient(low = 'green', high = 'red') +
-  coord_flip()
-
-ggplotly(plot_g)
 
 spiderplot_total <- faltas_ceo_agg
 spiderplot_total['Total'] <- c(100)
@@ -222,19 +215,14 @@ p <- plot_ly(
     ),
     showlegend = F
   )
-#p
-```
-
-```{r}
-summary(spiderplot_total)
-
+p
 ```
 
 
 #Separando o banco
-Foram removidas da coluna DATA_ATD (dd/mm/aaaa) o dia e o mes, sobrando apenas (aaaa), com o propósito de cortar o banco apenas para os anos de 2016 e 2017;
-E depois separados em nove novos bancos, ou seja, um banco para cada especialidade.
-É aplicada a função na.omit() nos três bancos que serão usados na análise.
+Foram removidos da coluna DATA_ATD (que estava no formato: dd/mm/aaaa), o dia e o mês, resultando em apenas (aaaa), com o propósito de cortar o banco apenas para os anos de 2016 e 2017;
+E depois separados em nove novos bancos, sendo um banco para cada especialidade.
+É aplicada a função na.omit() nos três bancos que serão usados na análise, para remover os valores NA (not available).
 ```{r}
 #Cortando o banco para deixar apenas os anos de 2016 e 2017
 #Separando o banco por especialidade
@@ -262,8 +250,10 @@ Odonto_EstomatologiaBucal <- na.omit(Odonto_EstomatologiaBucal)
 
 
 #Falta por especialidade
+Gráfico de radar apresentando o percentual das faltas por especialidade nos anos de 2016 e 2017, para as nove especialidades, também sem distinção por variáveis (escolaridade, sexo, dia da semana, periodo de atendimento, unidade referência, idade), ou seja o valor total.
+
 Foi feita uma análise para identificar o maior precentual de faltas por especialidade nos anos de 2016 e 2017.
-As únicas variáveis necessárias foram ESPECIALIDADE e FALTAS, porém foi preciso criar uma coluna VALOR, para que fosse possível agregar os valores de falta por especialidade, o resultado foi transformado em duas novas colunas com os valores de FALTA.S e FALTA.N, o percentual foi calculado, (FALTA.S / (FALTA.S + FALTA.N) * 100) e atribuido a uma nova coluna, gerando também um gráfico ordenado pelo maior valor. A partir disso, foi decidido usar os bancos das três primeiras especialidades com maior percentual de faltas, que são: Odonto_EstomatologiaBucal, Odonto_Radiologica, Odonto_Perio, para aplicar os algoritmos de machine learning, porém o banco da EstomatologiaBucal tem uma quantidade de dados pequena (850 linhas), e por conta disso não possui muita variância entre os dados de algumas variáveis, o que acabou gerando erros nos testes com os algoritmos, e portanto foi substituido pelo quarto banco na sequência, Odonto_Endodontia.
+As únicas variáveis necessárias foram ESPECIALIDADE e FALTAS, porém foi preciso criar uma coluna VALOR (preenchida apenas com o número 1), para que fosse possível agregar os valores de falta por especialidade e somar a quantidade final, o resultado foi transformado em duas novas colunas com os valores de FALTA.S e FALTA.N, o percentual foi calculado, (FALTA.S / (FALTA.S + FALTA.N) * 100) e atribuido a uma nova coluna, gerando também um gráfico ordenado pelo maior valor. A partir disso, foi decidido usar os bancos das três primeiras especialidades com maior percentual de faltas, que são: Odonto_EstomatologiaBucal, Odonto_Radiologica, Odonto_Perio, para aplicar os algoritmos de machine learning, porém o banco da EstomatologiaBucal tem uma quantidade de dados pequena (850 linhas), e por conta disso não possui muita variância entre os dados de algumas variáveis, o que acabou gerando erros nos testes com os algoritmos, e portanto foi substituido pelo quarto banco na sequência, Odonto_Endodontia.
 ```{r}
 faltas_ceo_16_17_agg <- faltas_ceo_16_17[, c(2,9)] 
 faltas_ceo_16_17_agg['VALOR'] <- 1
@@ -289,6 +279,7 @@ plot_g <- ggplot(faltas_ceo_16_17_agg, aes(x=ESPECIALIDADE, y=VALOR_P)) +
 
 ggplotly(plot_g)
 
+
 spiderplot <- faltas_ceo_16_17_agg
 spiderplot['Total'] <- c(100)
 especialidades <- spiderplot$ESPECIALIDADE
@@ -310,7 +301,7 @@ p <- plot_ly(
     ),
     showlegend = F
   )
-#p
+p
 
 ```
 
@@ -318,9 +309,11 @@ p <- plot_ly(
 #Descrição dos dados
 Descrição dos dados (summary e plot) para os bancos escolhidos. Os dados dos plots estão em percentual.
 As variáveis foram separadas para cada um dos bancos.
-
 Descrição de variáveis:
-DIA_SEMANA
+Para cada um dos bancos escolhidos, que são subconjuntos do banco de dados das faltas nos anos de 2016 e 2017 (faltas_ceo_16_17), foi feita a análise de algumas variáveis (DIA_SEMANA, SEXO, ESCOLARIDADE, PERIODO_ATD) de modo independente, para isso foram criados novos subconjuntos para cada um dos bancos escolhidos em relação a variável a ser analisada, de modo que eram gerados bancos de apenas duas colunas ('Variável' e 'Valor correspondente'), sem relação nehuma com qualquer outra variável.
+
+#DIA_SEMANA
+Para cada um dos três bancos escolhidos (Odonto_Endodontia, Odonto_Radiologica, Odonto_Perio), foi calculado o percentual de faltas por dia da semana. No eixo X: o valor percentual de faltas, no eixo Y: o dia da semana. O gráfico mostra em ordem decrescente o percentual de faltas.
 ```{r}
 #########################################################################################################################
 #Odonto_Endodontia por dia da semana
@@ -420,7 +413,8 @@ ggplot(Odonto_Perio_dia, aes(x=DIA_ATD, y=VALOR_P)) +
 ```
 
 
-SEXO
+#SEXO
+Para cada um dos três bancos escolhidos (Odonto_Endodontia, Odonto_Radiologica, Odonto_Perio), foi calculado o percentual de faltas por sexo. No eixo X: o valor percentual de faltas, no eixo Y: o sexo dos faltantes. O gráfico mostra em ordem decrescente o percentual de faltas.
 ```{r}
 #########################################################################################################################
 #Odonto_Endodontia por dia da semana
@@ -520,7 +514,8 @@ ggplot(Odonto_Perio_dia, aes(x=SEXO, y=VALOR_P)) +
 ```
 
 
-ESCOLARIDADE
+#ESCOLARIDADE
+Para cada um dos três bancos escolhidos (Odonto_Endodontia, Odonto_Radiologica, Odonto_Perio), foi calculado o percentual de faltas por escolaridade. No eixo X: a escolaridade dos faltantes, no eixo Y: o percentual dos faltantes. O gráfico mostra em ordem decrescente o percentual de faltas.
 ```{r}
 #########################################################################################################################
 #Odonto_Endodontia por dia da semana
@@ -551,7 +546,7 @@ ggplot(Odonto_Endodontia_escolaridade, aes(x=ESCOLARIDADE, y=VALOR_P)) +
   geom_bar(aes(fill = VALOR_P), stat="identity") +
   scale_fill_gradient(low = 'green', high = 'red') +
   ggtitle("Faltas por escolaridade Odonto Endodontia em %") +
-  coord_flip()
+  theme(axis.text.x=element_text(angle = -90, hjust = 0))
 
 
 #########################################################################################################################
@@ -583,7 +578,7 @@ ggplot(Odonto_Radiologica_escolaridade, aes(x=ESCOLARIDADE, y=VALOR_P)) +
   geom_bar(aes(fill = VALOR_P), stat="identity") +
   scale_fill_gradient(low = 'green', high = 'red') +
   ggtitle("Faltas por escolaridade Odonto Radiologica em %") +
-  coord_flip()
+  theme(axis.text.x=element_text(angle = -90, hjust = 0))
 
 
 #########################################################################################################################
@@ -615,11 +610,12 @@ ggplot(Odonto_Perio_escolaridade, aes(x=ESCOLARIDADE, y=VALOR_P)) +
   geom_bar(aes(fill = VALOR_P), stat="identity") +
   scale_fill_gradient(low = 'green', high = 'red') +
   ggtitle("Faltas por escolaridade Odonto Perio em %") +
-  coord_flip()
+  theme(axis.text.x=element_text(angle = -90, hjust = 0))
 ```
 
 
-PERIODO_ATD
+#PERIODO_ATD
+Para cada um dos três bancos escolhidos (Odonto_Endodontia, Odonto_Radiologica, Odonto_Perio), foi calculado o percentual de faltas por periodo de atendimento. No eixo X: o valor percentual de faltas, no eixo Y: o periodo de atendimento. O gráfico mostra em ordem decrescente o percentual de faltas.
 ```{r}
 #########################################################################################################################
 #Odonto_Endodontia por dia da semana
@@ -720,7 +716,7 @@ ggplot(Odonto_Perio_periodo, aes(x=PERIODO_ATD, y=VALOR_P)) +
 
 #Função para aplicar os modelos de machine learning
 Foi criada uma função que recebe como parametro o nome de um banco e aplica vários modelos de machine learning para retornar o que apresentar melhor resultado.
-Para aplicar os modelos é preciso separar o banco em treino (75% da amostra) e teste (25% da amostra), também é necessário criar um "controle", que inclui método (repeated cross-validation), number (número de folds), repeats (número de iterações para cada fold), sampling (para balancear os dados). O número de folds usado foi 10, com 5 repetições.
+Para aplicar os modelos é preciso separar o banco em treino (75% da amostra) e teste (25% da amostra), também é necessário criar um "controle", que inclui métodos, como: (repeated cross-validation), number (número de folds), repeats (número de iterações para cada fold), sampling (para balancear os dados). O número de folds usado foi 10, com 5 repetições.
 Foram escolhidos oito modelos de machine learning, que são: "glm" = Generalized Linear Model, "ranger" = Random Forest, "knn" = k-Nearest Neighbors, "nnet" = Neural Network, "dnn" = Stacked AutoEncoder Deep Neural Network, "xgbTree" = eXtreme Gradient Boosting, "gbm" = Stochastic Gradient Boosting, "adaboost" = AdaBoost Classification Trees.
 Os modelos são colocados em uma lista e com um método WHILE, a função executa todos os modelos da mesma. No final de cada execução é preciso verificar se o modelo é realmente útil para o propósito de classificação, para isso foi escolhido o valor preditivo negativo como instrumento de avaliação. A função retorna a matriz de confusão para a predição do melhor modelo.
 ```{r}
@@ -777,7 +773,10 @@ ml_models <- function(nome_banco){
   
   set.seed(2)
   #removendo os valores NA do banco
+  banco_escolhido <- na.exclude(nome_banco)
   banco_escolhido <- na.omit(nome_banco)
+
+  banco_escolhido$FALTA <- as.factor(banco_escolhido$FALTA)
 
   ## Criando a amostra de treino com 75% do tamanho da amostra total e amostra de teste com 25%
   smp_size <- floor(0.75 * nrow(banco_escolhido))
@@ -809,7 +808,7 @@ ml_models <- function(nome_banco){
     verboseIter = FALSE,
     savePredictions = TRUE,
     returnResamp = "all",
-    sampling = "smote" #balanceamento dos dados
+    sampling = "up" #balanceamento dos dados
     
   )
   
@@ -826,13 +825,14 @@ ml_models <- function(nome_banco){
   i <- 1 #indice para atualizar o while
   index <- 1 #indice que retorna o modelo da lista
   maior_valor <- 0 #usado para verificar qual o modelo com maior valor preditivo negativo.
+  #espec <- 0 #usado para verificar qual o modelo com maior especificidade.
   
   #loop para selecionar o melhor algoritmo
   while(i <= length((modelos))) {
     
     # Fit model
     model <- train(
-    FALTA ~ ., #variável de desfecho
+    FALTA ~ . , #variável de desfecho
     data = train_prep, #banco de treino
     preProcess = c("center", "scale"),
     metric = "ROC", # métrica para comparação dos modelos
@@ -867,7 +867,10 @@ ml_models <- function(nome_banco){
     neg_pred <- b[4] %>% as.data.frame()
     neg_pred <- neg_pred$Neg.Pred.Value
     
-    #verificação do maior valor preditivo negativo, como inicialmente o maior valor está atribuído como 0, o primeiro modelo sempre terá     o maior valor, ou seja, sempre que um modelo conseguir alcançar um valor preditivo negativo maior que o armazenado na memória, este      passa a ser o instrumento de verificação.
+    #espec <- b[2] %>% as.data.frame()
+    #espec <- espec$Specificity
+    
+    #verificação do maior valor preditivo negativo, como inicialmente o maior valor está atribuído como 0, o primeiro modelo sempre terá o maior valor, ou seja, sempre que um modelo conseguir alcançar um valor preditivo negativo maior que o armazenado na memória, este      passa a ser o instrumento de verificação.
     if(neg_pred > maior_valor){
       maior_valor <- neg_pred #valor preditivo negativo passa a ser o maior valor
       resultado <- paste("O melhor modelo foi: ", modelos[index], ", com o valor preditio negativo: ", neg_pred) #mensagem para informar       o modelo com melhor resultado
@@ -891,16 +894,15 @@ ml_models <- function(nome_banco){
   
 }
 
-
 ```
 
 
 ```{r}
-'
+
 # Parallel Processing
 cl <- makePSOCKcluster(5)
 registerDoParallel(cl)
-'
+
 ```
 
 
@@ -908,30 +910,30 @@ registerDoParallel(cl)
 A função foi aplicada nos três bancos, retornando o resultados da matriz de confusão para treino, o modelo com melhor resultado de valor preditivo negativo e um plot da matriz de confusão para a predição no teste.
 Para o banco: Odonto_Endodontia. Os resultados foram:
 ```{r}
-'
+
 ml_models(Odonto_Endodontia)
-'
+
 ```
 
 Para o banco: Odonto_Radiologica. Os resultados foram:
 ```{r}
-'
+
 ml_models(Odonto_Radiologica)
-'
+
 ```
 
 Para o banco: Odonto_Perio. Os resultados foram:
 ```{r}
-'
+
 ml_models(Odonto_Perio)
-'
+
 ```
 
 
 ```{r}
-'
+
 # stop Parallel Processing
 stopCluster(cl)
-'
+
 ```
 
